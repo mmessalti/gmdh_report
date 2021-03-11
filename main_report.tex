@@ -1,0 +1,181 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{verbatim}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\graphicspath{ {./fig/} }
+
+
+
+\title{\textbf{Towards a more expressive and interpretable GMDH}}
+\author{Student: Mohamed Messalti \\ 
+Supervisor: Pierre-Edouard Portier}
+
+\begin{document}
+\maketitle
+
+In this report, I present the central algorithm of my specific project : The Group Method of Data Handling (GMDH) algorithm.
+
+\section{Introduction : GMDH origin}
+This algorithm was introduced in 1968 by Professor Ivakhnenko \cite{ivakhnenko1971polynomial:1} of the Kiev Institute of Cybernetics. It is a rather old algorithm. According to the GmdhPy library \cite{GmdhPy:1} , “The resulting models are also known as self-organizing deep learning polynomial neural networks. It is one of the earliest deep learning methods.” We must be careful when comparing the GMDH to a deep learning algorithm. There are significant discrepancies.
+The most common deep learning algorithms today :
+\begin{itemize}
+\item are learned end-to-end,
+\item have a fixed structure (number of layers and neurons). We improve the parameters without modifying the structure and by iterations.
+\item The space of the considered functions is a priori larger than the space of the polynomial functions.
+\end{itemize}
+On the other hand, considering GMDH :
+\begin{itemize}
+\item the structure of the network is built during the training process
+\item the global function is quite simple, it is a polynomial.
+\end{itemize}
+
+
+\section{How does GMDH algorithm work ?}
+\subsection{An example of final GMDH architecture}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=11cm]{fig01_final_GMDH_architecture.png}
+    \caption{Example of GMDH architecture after model training}
+    \label{fig:1}
+\end{figure}
+
+Figure \ref{fig:1} is an example of GMDH architecture after model training. We can observe that not all features are used and that the structure looks like a tree. Everything is almost automatic (“self-organizing” as the name suggests):
+\begin{itemize}
+\item the number of layers is determined automatically
+\item feature selection is automatic too
+\end{itemize}
+$y_{3,1}=y_{predict}$ is a polynomial of the selected features
+
+\subsection{GMDH neuron}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=7cm]{GMDH_neuron_linearConv.PNG}
+    \caption{A GMDH neuron}
+    \label{fig:2}
+\end{figure}
+
+Before explaining in detail how the network is built, let's focus on a neuron. A neuron has two inputs and only one output. The output corresponds to a polynomial regression of the inputs.
+In my experiments, I only used the function called "linear\_cov" (figure \ref{fig:2}): 
+$y = w_0 + w_1 x_1 + w_2 x_2 + w_3 x_1 x_2$
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=11cm]{GMDH_archi_paper.PNG}
+    \caption{Prof. Ivakhnenko’s original paper architecture}
+    \label{fig:3}
+\end{figure}
+
+However, the gmdhPy library \cite{GmdhPy:1} also allows the use of quadratic and cubic functions. In his original paper, Mr Ivakhnenko \cite{ivakhnenko1971polynomial:1} uses a quadratic function \ref{fig:3} : 
+$y = a_0 + a_1 x_1 + a_2 x_2 + a_3 x_1^2 + a_4 x_2^2 + a_5 x_1 x_2$
+
+I decided to use the "linear\_cov" function for simplicity reasons. Indeed, by combining several neurons, we obtain a polynomial of degree equal to the number of layers at the output of the network.
+
+\subsection{First layer}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=6cm]{first_layer.PNG}
+    \caption{First Layer construction}
+    \label{fig:4}
+\end{figure}
+
+Let's first start with our dataset composed here of n=8 features (cf. figure \ref{fig:4}).
+
+For the first layer we will pairwise combine each feature. We will then use the pairs of features as inputs for our neurons. In our case, we will create here $k = {8\choose2} = 28$ (8 choose 2) 28 neurons for layer 1.
+
+Each neuron gives us a simple polynomial that combines its two inputs as described previously. For example,
+ $y_{1,1} = w_0 + w_1 x_1 + w_2 x_2 + w_3 x_1 x_2$, where $w_1$, $w_2$, and $w_3$ are determined by the ridge regression.
+ 
+ We then calculate the error committed by each neuron and select the neurons with the lowest error. The selected neurons are the inputs of the 2nd layer.
+ 
+ In the GmdhPy library \cite{GmdhPy:1}, the number of best neurons to be selected is determined automatically and it is equal to the number of original features by default. However, this hyper-parameter can be set to a minimum and a maximum. For example, if we only have 10 original features, we could set the minimum to 20. This way, the algorithm will select the 20 best neurons to forward them to the next layer.
+
+\subsection{Next layers and stop conditions}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=11cm]{GMDH_layer2.PNG}
+    \caption{Second layer construction}
+    \label{fig:5}
+\end{figure}
+
+The same process is repeated for the 2nd and the following layers, but we take as inputs the best results of the last layer, and also the original features, as illustrated in the figure \ref{fig:5}: 
+
+The stopping conditions are either :
+\begin{itemize}
+\item When a neuron satisfactorily approximates the target function. In other words, the error committed by the best neuron is smaller than an epsilon.
+\item Or, when the next layer is not as accurate as the previous layer. In other words, the error committed by the best neuron increases.
+\end{itemize}
+
+On the GmdhPy library they use a bite different strategy, once the best neuronal error of the last layer starts to deteriorate (to increase) relative to the best neuronal error of the penultimate layer, they continue to calculate k layers in advance to make sure that the error will not decrease again. k is a hyper-parameter of the library.
+
+Finally, when we clean up the network by removing unused neurons, we obtain an architecture similar to Figure \ref{fig:1}. The output of the network is the neuron with the best prediction.
+
+\section{Motivation}
+The advantage of the GMDH model compared to the traditional Deep Learning algorithms is that it is possible to trace back to the discovered polynomial.
+It's quite interesting because a lot of people today describe deep learning systems as "black boxes". However, the GMDH models are more of an explainable artificial intelligence approach. It could, for example, allow physicists to discover new formulas by applying this algorithm to their datasets.
+
+Improvements can still be possible, it would be interesting to make the discovered function more digestible, for example we could introduce symbolic regression to add more complex functions to our model such as cosine, sine, exponential or logarithm.
+
+\section{Contribution}
+\subsection{reminder on Ridge Regression}
+Ridge Regression is an extension of the linear regression model. It allows us to control the $l_2$ norm of the model coefficients through the alpha parameter. In the case of our neurons, ridge regression allows us to control the norm of the $w_i$ coefficients. if $\alpha=0$ then the ridge regression minimizes the Mean Square Error (MSE), so we have an ordinary least squares (OLS) model. % footprint here see google drive !!!!!!!!
+
+$f(x)= MSE(x)+ \alpha(\sum_{i} w_i^2) $
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=11cm]{alpha_Impact.PNG}
+    \caption{The Impact of Alpha on Ridge Regression illustrated by a linear regression}
+    \label{fig:6}
+\end{figure}
+
+Figure \ref{fig:6} shows the impact of the alpha parameter of the regression ridge in the case of simple linear regression. The greater the alpha, the smaller is the norm of the slope coefficient of the model line.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=11cm]{alpha_same_archi.PNG}
+    \caption{GMDH architecture with a fixed alpha value}
+    \label{fig:7}
+\end{figure}
+
+The GmdhPy library does not allow to tune the alpha value at the level of each neuron. The library imposes the same alpha value to each neuron. The user can therefore choose only one alpha value for all the neurons. Figure \ref{fig:7} shows an example where the user enters alpha=0.5, which is the default value of alpha.
+
+A possible improvement would be to allow the user to enter a set of alpha values (i.e. alphas=[0.1, 1.0, 10.0]) like the RidgeCV model from Scikit-Learn \cite{ridgeCV:1}. Then allow the algorithm to adjust the lambda value at the level of each neuron.
+
+\subsection{LOOCV Ridge Regression}
+
+Commonly, \textbf{Leave-One-Out-Cross Validation (LOOCV)} involves fitting the model n\_sample times, once for each omitted case (n\_sample= number of rows on the dataset). Indeed, Mean Squared error of the LOOCV is :
+
+$CV=\frac{1}{N}\sum_{i=1}^{N}e_{[i]}^2$
+
+where $e_{[i]}=y_i-\hat{y}_{[i]}$ is the error of the $i$th model with $i$th the value deleted. $y_i$ the given observation and  $\hat{y}_{[i]}$ is the predicted value.
+
+But for linear models, we do not have to estimate the model n\_sample times. However, LOOCV can be computed after estimating the model once on the complete dataset.
+On his website \cite{LOOCV:1}, Prof. Hyndman shows that the LOOCV mean square error can be calculated as follows:
+
+$CV=\frac{1}{N}\sum_{i=1}^{N}[e_{i}/(1-h_i)]^2$
+
+where $e_{i}=y_i-\hat{y}_{i}$ and $\hat{y}_{i}$ is the predicted value obtained when the model is estimated with all data included,
+
+where $h1, ... ,h_n$ are the diagonal values of the “hat-matrix” $H=X(X'X)^{-1}X'$
+
+The complete proof is available on the  Prof. Rob J Hyndman's website \cite{LOOCV:1}.
+
+\section{Results}
+
+
+
+
+
+
+\newpage
+\bibliographystyle{ieeetr}
+\bibliography{biblio}
+ 
+\end{document}
+
+
